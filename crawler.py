@@ -1,11 +1,6 @@
 #! /usr/bin/env python 
 # -*- coding: utf-8 -*-
-import re
-import pycurl
-import certifi
 import time
-import difflib
-import chardet
 import threading
 import os
 import socket
@@ -25,7 +20,7 @@ from log import Logger
 
 ############################################################################################
 #必须配置！ 要嗅探的网卡配置的网络及采样存放位置
-NetToSniff = '192.168.1.0'
+#NetToSniff = '192.168.1.0'
 WhereToStoreSamples = '../pcap'                               
 ############################################################################################
 
@@ -54,7 +49,7 @@ class _SnifferThr(threading.Thread):
             for dev in pcap.findalldevs():
                 net, mask = pcap.lookupnet(bytes(dev,'utf-8'))
                 if not net: continue
-                if socket.inet_ntoa(net) == NetToSniff:
+                if socket.inet_ntoa(net) != '0.0.0.0' and socket.inet_ntoa(mask) != '0.0.0.0':
                     iface = dev
                     break
             if not iface:
