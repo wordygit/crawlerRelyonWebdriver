@@ -56,6 +56,7 @@ class _SnifferThr(threading.Thread):
                 Log.error('error no iface found')
                 raise CrawlerExcetion('error no iface found')
             pc = pcap.pcap(iface)
+            pc.setfilter('tcp || udp')
             with open(self.pcappath,'wb') as f:
                 pfile = dpkt.pcap.Writer(f)
                 for timestamp,packet in pc:
@@ -63,9 +64,9 @@ class _SnifferThr(threading.Thread):
                     pfile.writepkt(packet, timestamp)
             self.ret = 0
             Log.info('SnifferThr end, pcap file %s' % self.pcappath)
-        except:
+        except Exception as e:
             self.ret = -1
-            Log.warning('SnifferThr exception, pcap file %s' % self.pcappath)
+            Log.warning(f'SnifferThr exception {e}, pcap file {self.pcappath}')
 
     @property
     def result(self):
@@ -174,10 +175,10 @@ class _WebaccessThr(threading.Thread):
 
 
 '''
-抓包接口：
+抓包接口
 hreflist, 超链接列表
 wherestore,      包存放的目录
-app,      网址或者app名，用做包名
+app,      网址或者app名，用
 browser,  浏览器元组
 返回:        各浏览器的抓包成功或失败，0成功，1失败  {'Chrome':0, 'Firefox':0, 'IE':0}
 '''
@@ -191,6 +192,7 @@ def sample(hreflist, wherestore:str, app:str, browser=('IE',)):
     for br in browser:
         _global_opensed = True
         pcappath = wherestore + '/' + app + '_' + br + '_' + datetime.now().strftime('%Y%m%d%H%M') + '.pcap'
+        print(pcappath)
         cnifferThread = _SnifferThr(pcappath)
         cnifferThread.start()
         webaccessThread = _WebaccessThr(br, hreflist)
