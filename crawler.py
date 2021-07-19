@@ -19,8 +19,8 @@ from log import Logger
 
 
 ############################################################################################
-#必须配置！ 要嗅探的网卡配置的网络及采样存放位置
-#NetToSniff = '192.168.1.0'
+#why the socket.inet_ntoa(net) not eq to the ip of dev?
+#IpOfDevToSniff = '192.168.1.0'
 WhereToStoreSamples = '../pcap'                               
 ############################################################################################
 
@@ -34,7 +34,7 @@ class CrawlerExcetion(Exception):
 if os.path.exists(WhereToStoreSamples) == False:
     os.mkdir(WhereToStoreSamples)
 Log = Logger('autoproto.crawler','crawler.log')   
-_global_opensed = True      #访问网页结束，设置该标志通知抓包停止
+_global_opensed = True      #starting of access websit, notify the _SnifferThr thread to start capture 
 class _SnifferThr(threading.Thread):
     '''capture pcap during resource accessing'''
     def __init__(self, pcappath:str):
@@ -49,6 +49,8 @@ class _SnifferThr(threading.Thread):
             for dev in pcap.findalldevs():
                 net, mask = pcap.lookupnet(bytes(dev,'utf-8'))
                 if not net: continue
+                #why the socket.inet_ntoa(net) not eq to the ip of dev?
+                #if IpOfDevToSniff == socket.inet_ntoa(net):
                 if socket.inet_ntoa(net) != '0.0.0.0' and socket.inet_ntoa(mask) != '0.0.0.0':
                     iface = dev
                     break
@@ -56,6 +58,7 @@ class _SnifferThr(threading.Thread):
                 Log.error('error no iface found')
                 raise CrawlerExcetion('error no iface found')
             pc = pcap.pcap(iface)
+            #ignore other protocol
             pc.setfilter('tcp || udp')
             with open(self.pcappath,'wb') as f:
                 pfile = dpkt.pcap.Writer(f)
@@ -76,15 +79,13 @@ class _SnifferThr(threading.Thread):
 
 class _WebaccessThr(threading.Thread):
     '''access resources in urllist by browser'''
-    #进程表
     PROCESS = { 'IE':('iexplore.exe','IEDriverServer.exe')}
-    #浏览器实例化接口
+    #web driver
     DRIVER = {'IE':webdriver.Ie}
-    #每个域名资源上限，限制这个是为了提高速度和较少报文。默认未使用
     RESOURCELIMIT = 50
-    #浏览器行为有差异，所以不同浏览器设置的超时时间不同
+    #a timeout threshold
     TIMEOUT = {'IE':70}
-    #浏览域名是否成功的标准，默认是成功访问50%以上的资源，可认为成功
+    #for an url list, more the 50 percent means the end 
     WELLDONE_PCT = 0.5
 
     def __init__(self, browser:str, urllist):
@@ -100,7 +101,7 @@ class _WebaccessThr(threading.Thread):
 
     def run(self):
         global _global_opensed
-        #减少背景流
+        #avoid background traffic
         for p in _WebaccessThr.PROCESS:
             self.kill(p)
         time.sleep(0.5)
@@ -115,7 +116,7 @@ class _WebaccessThr(threading.Thread):
 
         _global_opensed = True
         cnt = 0
-        #随机挑选30个资源，效率会有所提升
+        #limit the quantity to increase the efficiency
         if len(self.urllist) <= _WebaccessThr.RESOURCELIMIT:
             idx = range(0, len(self.urllist))
         else:
@@ -135,7 +136,7 @@ class _WebaccessThr(threading.Thread):
             try:
                 browser.get(url)
                 cnt += 1
-                #资源访问50%可以满足抓包需求？
+        
                 if float(cnt)/float(len(self.urllist)) > _WebaccessThr.WELLDONE_PCT:
                     self.ret = 0
             except UnexpectedAlertPresentException as e:
@@ -175,18 +176,21 @@ class _WebaccessThr(threading.Thread):
 
 
 '''
-抓包接口
-hreflist, 超链接列表
-wherestore,      包存放的目录
-app,      网址或者app名，用
-browser,  浏览器元组
-返回:        各浏览器的抓包成功或失败，0成功，1失败  {'Chrome':0, 'Firefox':0, 'IE':0}
+interface
+hreflist: list of url should be crawler
+wherestore:     dir to store pcap
+app:      domain name
+browser:  brower tuple
+ret:        0 success,1 fail
 '''
-def sample(hreflist, wherestore:str, app:str, browser=('IE',)):
+def sample(hreflist, app:str, browser=('IE',)):
     ret = {}
-    if len(hreflist) == 0 or not wherestore:
+    if len(hreflist) == 0 or not app:
         Log.warning('parameter error')
         return None
+    wherestore = os.path.join(WhereToStoreSamples, app)
+    if os.path.exists(wherestore) == False:
+        os.mkdir(wherestore)
     global _global_opensed
     start = datetime.now()
     for br in browser:
@@ -200,7 +204,6 @@ def sample(hreflist, wherestore:str, app:str, browser=('IE',)):
         cnifferThread.join()
         webaccessThread.join()
         ret[br] = cnifferThread.result|webaccessThread.result
-        #根据非翻墙抓包的经验来看，主要采集一个浏览器抓包成功即可退出了，浏览器的优先级未IE,Chrome，Firefox
         if ret[br] == 0 and os.path.getsize(pcappath) > 0:
             break
         time.sleep(2)
@@ -209,9 +212,9 @@ def sample(hreflist, wherestore:str, app:str, browser=('IE',)):
 
 
 if __name__ == '__main__':
-    wwwdict = {'www.sohu.com':['http://www.sohu.com']}
+    wwwdict = {'xuebao.czu.cn':['http://xuebao.czu.cn']}
     for www in wwwdict:
-        ret = sample(wwwdict[www], '.', www[www.find('//')+2:], browser=('IE',))
+        ret = sample(wwwdict[www], www, browser=('IE',))
         print(ret)
 
  
